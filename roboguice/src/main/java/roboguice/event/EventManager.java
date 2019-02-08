@@ -2,11 +2,8 @@ package roboguice.event;
 
 import roboguice.event.eventListener.ObserverMethodListener;
 import roboguice.inject.ContextSingleton;
-
 import android.content.Context;
-
 import com.google.inject.Inject;
-
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.Map.Entry;
@@ -26,10 +23,13 @@ import java.util.Map.Entry;
  */
 @ContextSingleton
 public class EventManager {
-    @Inject protected Context context;
 
-    protected Map<Class<?>, Set<EventListener<?>>> registrations = new HashMap<Class<?>, Set<EventListener<?>>>(); // synchronized set
+    @Inject
+    protected Context context;
 
+    protected Map<Class<?>, Set<EventListener<?>>> registrations = new HashMap<Class<?>, Set<EventListener<?>>>();
+
+    // synchronized set
     /**
      * Register the given EventListener to the contest and event class.
      *
@@ -37,15 +37,13 @@ public class EventManager {
      * @param listener to be triggered
      * @param <T> event type
      */
-    public <T> void registerObserver( Class<T> event, EventListener listener ) {
+    public <T extends java.lang.Object> void registerObserver(Class<T> event, EventListener listener) {
         Set<EventListener<?>> observers = registrations.get(event);
         if (observers == null) {
             observers = Collections.synchronizedSet(new LinkedHashSet<EventListener<?>>());
             registrations.put(event, observers);
         }
-
         observers.add(listener);
-
     }
 
     /**
@@ -55,7 +53,7 @@ public class EventManager {
      * @param method to be called
      * @param event observed
      */
-    public <T> void registerObserver(Object instance, Method method, Class<T> event) {
+    public <T extends java.lang.Object> void registerObserver(Object instance, Method method, Class<T> event) {
         registerObserver(event, new ObserverMethodListener<T>(instance, method));
     }
 
@@ -66,15 +64,13 @@ public class EventManager {
      * @param listener to be unregistered
      * @param <T> event type
      */
-    public <T> void unregisterObserver(Class<T> event, EventListener<T> listener ) {
-
+    public <T extends java.lang.Object> void unregisterObserver(Class<T> event, EventListener<T> listener) {
         final Set<EventListener<?>> observers = registrations.get(event);
-        if (observers == null) return;
-
-        // As documented in http://docs.oracle.com/javase/1.4.2/docs/api/java/util/Collections.html#synchronizedSet(java.util.Set)
-        //noinspection SynchronizationOnLocalVariableOrMethodParameter
+        if (observers == null) {
+            return;
+        }
         synchronized (observers) {
-            for (Iterator<EventListener<?>> iterator = observers.iterator(); iterator.hasNext();) {
+            for (Iterator<EventListener<?>> iterator = observers.iterator(); iterator.hasNext(); ) {
                 final EventListener registeredListener = iterator.next();
                 if (registeredListener == listener) {
                     iterator.remove();
@@ -90,18 +86,16 @@ public class EventManager {
      * @param instance to be unregistered
      * @param event observed
      */
-    public <T> void unregisterObserver(Object instance, Class<T> event) {
-
+    public <T extends java.lang.Object> void unregisterObserver(Object instance, Class<T> event) {
         final Set<EventListener<?>> observers = registrations.get(event);
-        if (observers == null) return;
-
-        // As documented in http://docs.oracle.com/javase/1.4.2/docs/api/java/util/Collections.html#synchronizedSet(java.util.Set)
-        //noinspection SynchronizationOnLocalVariableOrMethodParameter
+        if (observers == null) {
+            return;
+        }
         synchronized (observers) {
-            for (Iterator<EventListener<?>> iterator = observers.iterator(); iterator.hasNext();) {
+            for (Iterator<EventListener<?>> iterator = observers.iterator(); iterator.hasNext(); ) {
                 final EventListener listener = iterator.next();
-                if( listener instanceof ObserverMethodListener ) {
-                    final ObserverMethodListener observer = ((ObserverMethodListener)listener);
+                if (listener instanceof ObserverMethodListener) {
+                    final ObserverMethodListener observer = ((ObserverMethodListener) listener);
                     if (observer.getInstance() == instance) {
                         iterator.remove();
                         break;
@@ -118,25 +112,28 @@ public class EventManager {
      * @param event observed
      */
     public void fire(Object event) {
-
         final Set<EventListener<?>> observers = registrations.get(event.getClass());
-        if (observers == null) return;
+        if (observers == null) {
+            return;
+        }
+        for (EventListener observer : copyObservers(observers)) {
+            observer.onEvent(event);
+        }
+    }
 
-        // As documented in http://docs.oracle.com/javase/1.4.2/docs/api/java/util/Collections.html#synchronizedSet(java.util.Set)
+    private Set<EventListener<?>> copyObservers(Set<EventListener<?>> observers) {
+        final Set<EventListener<?>> copy;
         //noinspection SynchronizationOnLocalVariableOrMethodParameter
         synchronized (observers) {
-            for (EventListener observer : observers)
-                //noinspection unchecked
-                observer.onEvent(event);
+            copy = new LinkedHashSet<EventListener<?>>(observers);
         }
-
+        return copy;
     }
-    
-    
+
     public void destroy() {
-        for( Entry<Class<?>, Set<EventListener<?>>> e : registrations.entrySet() )
+        for (Entry<Class<?>, Set<EventListener<?>>> e : registrations.entrySet()) {
             e.getValue().clear();
+        }
         registrations.clear();
     }
-
 }
